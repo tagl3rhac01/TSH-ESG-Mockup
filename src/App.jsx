@@ -1805,7 +1805,7 @@ export default function App() {
                         const p = PROPERTIES.find(prop => prop.id === Number(e.target.value));
                         if (p) setSelectedProperty(p);
                       }}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 font-semibold text-slate-800 appearance-none focus:ring-2 focus:ring-primary focus:border-primary outline-none text-sm"
+                      className="w-full bg-white border border-slate-300 rounded-lg pl-4 pr-10 py-3 font-semibold text-slate-800 appearance-none bg-none focus:ring-2 focus:ring-primary focus:border-primary outline-none text-sm"
                     >
                       {PROPERTIES.map(p => (
                         <option key={p.id} value={p.id}>{p.name}</option>
