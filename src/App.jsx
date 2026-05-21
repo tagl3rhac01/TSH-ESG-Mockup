@@ -84,6 +84,7 @@ function SubmissionForm({ selectedProperty, submissions, onSaveDraft, onSubmitFi
       coolingWater: sub ? Math.round(sub.water * 0.3) : 0,
       processWater: selectedProperty.code === "MY-HYPAK" ? 890 : 0,
       newater: selectedProperty.code === "SG-18ROB" || selectedProperty.code === "AU-ROLP" ? 340 : 0,
+      rainwater: selectedProperty.code === "SG-18ROB" ? 12 : 0,
       naturalGas: sub ? sub.gas : 0,
       townGas: selectedProperty.code === "SG-FRRP" ? 680 : 0,
       diesel: 240,
@@ -143,11 +144,18 @@ function SubmissionForm({ selectedProperty, submissions, onSaveDraft, onSubmitFi
 
   // Real-time calculations
   const calculatedScope2 = useMemo(() => {
-    const gridVal = Number(formValues.gridElectricity);
-    const landlordVal = Number(formValues.landlordElectricity);
+    let gridVal = Number(formValues.gridElectricity || 0);
+    let landlordVal = Number(formValues.landlordElectricity || 0);
+    if (formValues.electricityUnit === 'MWh') {
+      gridVal *= 1000;
+      landlordVal *= 1000;
+    } else if (formValues.electricityUnit === 'GJ') {
+      gridVal *= 277.78;
+      landlordVal *= 277.78;
+    }
     const factor = getGridEF(selectedProperty.country);
     return (((gridVal + landlordVal) * factor) / 1000).toFixed(2);
-  }, [formValues.gridElectricity, formValues.landlordElectricity, selectedProperty]);
+  }, [formValues.gridElectricity, formValues.landlordElectricity, formValues.electricityUnit, selectedProperty]);
 
   const gasKwhEquiv = useMemo(() => {
     return (Number(formValues.naturalGas) * 10.63).toFixed(2);
@@ -262,87 +270,174 @@ function SubmissionForm({ selectedProperty, submissions, onSaveDraft, onSubmitFi
         {/* TAB 1: Electricity */}
         {formTab === 1 && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h4 className="font-headline-sm text-headline-sm text-slate-800">Electricity Consumption</h4>
-              <div className="bg-slate-100 border border-slate-200 px-4 py-2 rounded-lg text-right">
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Total Consumed (Calculated)</p>
-                <p className="font-data-table text-sm font-extrabold text-slate-800 mt-0.5">
-                  {(Number(formValues.gridElectricity) + Number(formValues.landlordElectricity)).toLocaleString()} kWh
-                </p>
-              </div>
+            {/* Info Banner */}
+            <div className="bg-[#F3EEFE]/30 border border-primary/20 rounded-lg p-4 mb-6 flex items-center gap-4">
+              <span className="material-symbols-outlined text-primary">info</span>
+              <p className="font-body-sm text-slate-600">
+                <span className="font-bold text-slate-800">Conversion Factors:</span> 1 MWh = 1,000 kWh, 1 GJ = 277.78 kWh.
+                <span className="ml-4">Current sub-meter billing accuracy: <span className="font-data-table font-bold text-primary">Class 1.0</span>.</span>
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <div className="p-4 border border-slate-200 rounded-lg space-y-3">
-                  <label className="text-xs font-bold text-slate-700 block">Grid Electricity (Common Area)</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.gridElectricity || ''}
-                      onChange={e => handleInputChange('gridElectricity', e.target.value)}
-                      className="flex-1 border border-slate-200 rounded-lg p-2.5 font-data-table text-sm outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <select 
-                      value={formValues.electricityUnit}
-                      onChange={e => handleInputChange('electricityUnit', e.target.value)}
-                      className="border border-slate-200 rounded-lg p-2.5 text-xs font-bold bg-slate-100"
-                    >
-                      <option>kWh</option>
-                      <option>MWh</option>
-                      <option>GJ</option>
-                    </select>
-                  </div>
+            {/* Split Screen Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Left Column: Electricity Management (col-span-7) */}
+              <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                  <h3 className="font-headline-sm text-slate-800 font-bold">Electricity Management</h3>
                 </div>
-
-                <div className="p-4 border border-slate-200 rounded-lg space-y-3">
-                  <label className="text-xs font-bold text-slate-700 block">Landlord Electricity</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.landlordElectricity || ''}
-                      onChange={e => handleInputChange('landlordElectricity', e.target.value)}
-                      className="flex-1 border border-slate-200 rounded-lg p-2.5 font-data-table text-sm outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <div className="bg-slate-100 border border-slate-200 rounded-lg px-4 flex items-center text-xs font-bold">kWh</div>
-                  </div>
-                </div>
-
-                {selectedProperty.code === "SG-18ROB" && (
-                  <div className="p-4 border border-primary/20 bg-primary/5 rounded-lg space-y-3">
-                    <div className="flex justify-between items-center">
-                      <label className="text-xs font-bold text-primary block">Tenant Electricity (Sub-metered)</label>
-                      <span className="text-[9px] bg-primary text-white px-2 py-0.5 rounded font-extrabold uppercase tracking-wide">Property Specific</span>
+                <div className="p-8 space-y-6">
+                  <div className="space-y-2">
+                    <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">GRID ELECTRICITY (COMMON AREA)</label>
+                    <div className="flex w-full items-stretch">
+                      <input 
+                        type="number"
+                        placeholder="0.00"
+                        value={formValues.gridElectricity || ''}
+                        onChange={e => handleInputChange('gridElectricity', e.target.value)}
+                        className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                      />
+                      <select 
+                        value={formValues.electricityUnit}
+                        onChange={e => handleInputChange('electricityUnit', e.target.value)}
+                        className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-3 py-3 text-xs font-bold flex-shrink-0 focus:ring-1 focus:ring-primary focus:border-primary cursor-pointer"
+                      >
+                        <option>kWh</option>
+                        <option>MWh</option>
+                        <option>GJ</option>
+                      </select>
                     </div>
-                    <input 
-                      type="number"
-                      placeholder="Enter tenant total"
-                      value={formValues.tenantElectricity || ''}
-                      onChange={e => handleInputChange('tenantElectricity', e.target.value)}
-                      className="w-full border border-primary/20 rounded-lg p-2.5 font-data-table text-sm outline-none focus:ring-1 focus:ring-primary bg-white"
-                    />
+                    <p className="text-[11px] text-slate-400">Total common area grid-consumed electricity.</p>
                   </div>
-                )}
+
+                  <div className="space-y-2 pt-4 border-t border-slate-100">
+                    <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">LANDLORD ELECTRICITY</label>
+                    <div className="flex w-full items-stretch">
+                      <input 
+                        type="number"
+                        placeholder="0.00"
+                        value={formValues.landlordElectricity || ''}
+                        onChange={e => handleInputChange('landlordElectricity', e.target.value)}
+                        className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                      />
+                      <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">kWh</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">Landlord shared services/HVAC central system consumption.</p>
+                  </div>
+
+                  {selectedProperty.code === "SG-18ROB" && (
+                    <div className="space-y-2 pt-4 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">TENANT ELECTRICITY (SUB-METERED)</label>
+                        <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-extrabold tracking-tighter uppercase font-bold">PROPERTY SPECIFIC</span>
+                      </div>
+                      <div className="flex w-full items-stretch">
+                        <input 
+                          type="number"
+                          placeholder="Enter tenant total"
+                          value={formValues.tenantElectricity || ''}
+                          onChange={e => handleInputChange('tenantElectricity', e.target.value)}
+                          className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">kWh</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">Tenant sub-metered cumulative reporting.</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-4">
-                <h5 className="font-label-caps text-xs text-slate-500 uppercase tracking-widest font-bold">Carbon Emissions Conversion</h5>
-                
-                <div className="divide-y divide-slate-200">
-                  <div className="py-3 flex justify-between text-xs">
-                    <span className="text-slate-500">Grid Emission Factor</span>
-                    <span className="font-data-table font-semibold text-slate-700">{getGridEF(selectedProperty.country)} kgCO2e/kWh</span>
+              {/* Right Column: Breakdown & Map/Location Context (col-span-5) */}
+              <div className="lg:col-span-5 space-y-6">
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 className="font-headline-sm text-slate-800 font-bold">Electricity Breakdown</h3>
                   </div>
-                  <div className="py-3 flex justify-between text-xs items-center">
-                    <span className="text-slate-500 font-semibold">Total Scope 2 (Calculated)</span>
-                    <span className="font-data-table text-sm font-extrabold text-primary">{calculatedScope2} tCO2e</span>
+                  <div className="p-6 space-y-4">
+                    {/* Grid Electricity */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">Grid Electricity</p>
+                        <p className="text-xs text-slate-400">Meter: E-GR-01</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-data-table font-bold text-slate-800 text-sm">
+                          {(() => {
+                            let val = Number(formValues.gridElectricity || 0);
+                            if (formValues.electricityUnit === 'MWh') val *= 1000;
+                            else if (formValues.electricityUnit === 'GJ') val *= 277.78;
+                            return Math.round(val).toLocaleString();
+                          })()} kWh
+                        </p>
+                        <p className="text-[10px] text-slate-400">Converted from {formValues.gridElectricity || 0} {formValues.electricityUnit}</p>
+                      </div>
+                    </div>
+
+                    {/* Landlord Electricity */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">Landlord Electricity</p>
+                        <p className="text-xs text-slate-400">Meter: E-LL-01</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-data-table font-bold text-slate-800 text-sm">
+                          {Number(formValues.landlordElectricity || 0).toLocaleString()} kWh
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Tenant Electricity */}
+                    {selectedProperty.code === "SG-18ROB" && (
+                      <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+                        <div>
+                          <p className="font-body-md font-bold text-slate-800">Tenant Electricity</p>
+                          <p className="text-xs text-slate-400">Meter: E-TN-01</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-data-table font-bold text-slate-800 text-sm">
+                            {Number(formValues.tenantElectricity || 0).toLocaleString()} kWh
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Grid Emission Factor */}
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200/50">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">Grid Emission Factor</p>
+                        <p className="text-xs text-slate-400">Region: {selectedProperty.country}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-data-table font-bold text-primary text-sm">
+                          {getGridEF(selectedProperty.country)} kgCO2e/kWh
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-6 py-4 bg-primary/5 border-t border-primary/10 flex justify-between items-center">
+                    <span className="font-label-caps text-primary font-bold text-xs tracking-wider">TOTAL SCOPE 2</span>
+                    <span className="font-data-table font-bold text-primary text-base">
+                      {calculatedScope2} tCO2e
+                    </span>
                   </div>
                 </div>
 
-                <div className="p-3 bg-secondary-container/10 border border-secondary-container/30 text-slate-500 text-[11px] leading-relaxed italic rounded-lg">
-                  Calculations based YTD local grid variables. Scope 2 location-based reporting methods applied.
+                {/* Map/Location Placeholder for Context */}
+                <div className="rounded-xl overflow-hidden border border-slate-200 h-[200px] relative group shadow-sm">
+                  <img 
+                    className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700" 
+                    alt="A clean, top-down architectural layout of a modern sustainable building floorplan" 
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3BqxoD8TgVrm8gKcwyKsPqEVKF-XPtUEqIrFx46eVGgJqhpYip40HkK8T9O1F2fKeOrH6gXkxj01KGbTGzYeXHvFkkWRdxt5_k3OITDKCYKgBYq66kFNko_jiWIySvS-2aqeOoekX_eVcxTFc7LDsk1kWLET6umVdoI8RjKxaVBvMTBrAmsLzLFENn0a3ijuUHXrILNsFl_boCGNkNB_6h51DcTb3oKLOsNq5f54UA4EDf5LCDCvQxpmUyyrOSYYPiukOw-Xcq7Q"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                  <div className="absolute bottom-4 left-4">
+                    <p className="text-white font-bold text-sm">Site: {selectedProperty.name}</p>
+                    <p className="text-white/70 text-xs">{selectedProperty.country === "Singapore" ? "Singapore CBD" : selectedProperty.country === "Australia" ? "Western Australia" : "Asia-Pacific Region"}</p>
+                  </div>
+                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur p-2 rounded-lg text-[10px] font-bold shadow-sm text-slate-800">
+                    GPS: {selectedProperty.code === "SG-18ROB" ? "1.2823° N, 103.8507° E" : selectedProperty.code === "AU-ROLP" ? "31.9505° S, 115.8605° E" : "1.2902° N, 103.8519° E"}
+                  </div>
                 </div>
               </div>
             </div>
@@ -352,91 +447,195 @@ function SubmissionForm({ selectedProperty, submissions, onSaveDraft, onSubmitFi
         {/* TAB 2: Water */}
         {formTab === 2 && (
           <div className="space-y-6">
-            <h4 className="font-headline-sm text-headline-sm text-slate-800">Water Consumption</h4>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <div className="p-4 border border-slate-200 rounded-lg space-y-3">
-                  <label className="text-xs font-bold text-slate-700 block">Potable Water Consumption</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.domesticWater || ''}
-                      onChange={e => handleInputChange('domesticWater', e.target.value)}
-                      className="flex-1 border border-slate-200 rounded-lg p-2.5 font-data-table text-sm outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <div className="bg-slate-100 border border-slate-200 rounded-lg px-4 flex items-center text-xs font-bold">m³</div>
+            {/* Warning Banner */}
+            <div className="bg-[#F3EEFE]/30 border border-primary/20 rounded-lg p-4 mb-6 flex items-center gap-4">
+              <span className="material-symbols-outlined text-primary">info</span>
+              <p className="font-body-sm text-slate-600">
+                <span className="font-bold text-slate-800">Conversion Factor:</span> 1 m³ = 1,000 Liters. 
+                <span className="ml-4">Current submission intensity: <span className="font-data-table font-bold text-primary">2.4 m³/FTE</span>.</span>
+              </p>
+              <button 
+                type="button" 
+                className="ml-auto text-primary font-bold text-body-sm hover:underline"
+                onClick={() => triggerToast("Threshold ranges: Green < 2.0, Amber 2.0 - 3.5, Red > 3.5 m³/FTE", "info")}
+              >
+                View Thresholds
+              </button>
+            </div>
+
+            {/* Split Screen Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Left Column: Water Management (col-span-7) */}
+              <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                  <h3 className="font-headline-sm text-slate-800 font-bold">Water Management</h3>
+                </div>
+                <div className="p-8 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                      <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">POTABLE WATER USAGE</label>
+                      <div className="flex w-full items-stretch">
+                        <input 
+                          type="number"
+                          readOnly
+                          value={(Number(formValues.domesticWater) + Number(formValues.irrigationWater) + Number(formValues.coolingWater)).toFixed(2)}
+                          className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg bg-slate-50 cursor-not-allowed text-slate-600 outline-none"
+                        />
+                        <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">m³</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">Reflects main municipal meter reading (sum of sub-meters).</p>
+                    </div>
+
+                    {(selectedProperty.country === "Singapore" || selectedProperty.code === "SG-18ROB") && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">NEWater USAGE</label>
+                          <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-extrabold tracking-tighter uppercase font-bold">SG STANDARD</span>
+                        </div>
+                        <div className="flex w-full items-stretch">
+                          <input 
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={formValues.newater || ''}
+                            onChange={e => handleInputChange('newater', e.target.value)}
+                            className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                          />
+                          <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">m³</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">High-grade reclaimed water usage.</p>
+                      </div>
+                    )}
+
+                    {(selectedProperty.code === "MY-HYPAK" || selectedProperty.country === "Malaysia") && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">PROCESS WATER USAGE</label>
+                          <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-extrabold tracking-tighter uppercase font-bold">PROCESS SPECIFIC</span>
+                        </div>
+                        <div className="flex w-full items-stretch">
+                          <input 
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={formValues.processWater || ''}
+                            onChange={e => handleInputChange('processWater', e.target.value)}
+                            className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                          />
+                          <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">m³</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">Industrial process water usage.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 pt-4 border-t border-slate-100">
+                    <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider block">RAINWATER HARVESTING</label>
+                    <div className="flex w-full items-stretch max-w-[280px]">
+                      <input 
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formValues.rainwater || ''}
+                        onChange={e => handleInputChange('rainwater', e.target.value)}
+                        className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                      />
+                      <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">m³</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">Rainwater captured and utilized on-site.</p>
                   </div>
                 </div>
-
-                {(selectedProperty.code === "SG-18ROB" || selectedProperty.code === "AU-ROLP") && (
-                  <div className="p-4 border border-primary/20 bg-primary/5 rounded-lg space-y-3">
-                    <div className="flex justify-between items-center">
-                      <label className="text-xs font-bold text-primary block">NEWater (Recycled Utility Water)</label>
-                      <span className="text-[9px] bg-primary text-white px-2 py-0.5 rounded font-extrabold uppercase tracking-wide">Singapore Standard</span>
-                    </div>
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.newater || ''}
-                      onChange={e => handleInputChange('newater', e.target.value)}
-                      className="w-full border border-primary/20 rounded-lg p-2.5 font-data-table text-sm outline-none bg-white"
-                    />
-                  </div>
-                )}
-
-                {selectedProperty.code === "MY-HYPAK" && (
-                  <div className="p-4 border border-amber-300 bg-amber-50 rounded-lg space-y-3">
-                    <label className="text-xs font-bold text-amber-800 block">Industrial Process Water</label>
-                    <input 
-                      type="number"
-                      placeholder="Industrial usage only"
-                      value={formValues.processWater || ''}
-                      onChange={e => handleInputChange('processWater', e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg p-2.5 font-data-table text-sm outline-none bg-white"
-                    />
-                  </div>
-                )}
               </div>
 
-              <div className="space-y-4">
-                <div className="p-4 border border-slate-200 rounded-lg space-y-3">
-                  <label className="text-xs font-semibold text-slate-600 block">Cooling Tower Water</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.coolingWater || ''}
-                      onChange={e => handleInputChange('coolingWater', e.target.value)}
-                      className="flex-1 border border-slate-200 rounded-lg p-2.5 font-data-table text-sm outline-none"
-                    />
-                    <div className="bg-slate-100 border border-slate-200 rounded-lg px-4 flex items-center text-xs font-bold">m³</div>
+              {/* Right Column: Destination Breakdown & Map/Location Context (col-span-5) */}
+              <div className="lg:col-span-5 space-y-6">
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 className="font-headline-sm text-slate-800 font-bold">Destination Breakdown</h3>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    {/* HVAC / Cooling Towers */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-primary transition-all">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">HVAC / Cooling Towers</p>
+                        <p className="text-xs text-slate-400">Meter: M-CT-01</p>
+                      </div>
+                      <div className="flex items-center gap-2 max-w-[130px] w-full">
+                        <input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formValues.coolingWater || ''}
+                          onChange={e => handleInputChange('coolingWater', e.target.value)}
+                          className="w-full min-w-0 text-right font-data-table font-bold border border-slate-200 rounded p-1.5 text-sm focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="text-[10px] text-slate-500 font-bold flex-shrink-0">m³</span>
+                      </div>
+                    </div>
+
+                    {/* Ablution & General */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-primary transition-all">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">Ablution &amp; General</p>
+                        <p className="text-xs text-slate-400">Meter: M-WC-01-20</p>
+                      </div>
+                      <div className="flex items-center gap-2 max-w-[130px] w-full">
+                        <input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formValues.domesticWater || ''}
+                          onChange={e => handleInputChange('domesticWater', e.target.value)}
+                          className="w-full min-w-0 text-right font-data-table font-bold border border-slate-200 rounded p-1.5 text-sm focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="text-[10px] text-slate-500 font-bold flex-shrink-0">m³</span>
+                      </div>
+                    </div>
+
+                    {/* Landscaping */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-primary transition-all">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">Landscaping</p>
+                        <p className="text-xs text-slate-400">Meter: M-LS-01</p>
+                      </div>
+                      <div className="flex items-center gap-2 max-w-[130px] w-full">
+                        <input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formValues.irrigationWater || ''}
+                          onChange={e => handleInputChange('irrigationWater', e.target.value)}
+                          className="w-full min-w-0 text-right font-data-table font-bold border border-slate-200 rounded p-1.5 text-sm focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="text-[10px] text-slate-500 font-bold flex-shrink-0">m³</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-6 py-4 bg-primary/5 border-t border-primary/10 flex justify-between items-center">
+                    <span className="font-label-caps text-primary font-bold text-xs tracking-wider">RECONCILED TOTAL</span>
+                    <span className="font-data-table font-bold text-primary text-base">
+                      {(Number(formValues.domesticWater) + Number(formValues.irrigationWater) + Number(formValues.coolingWater)).toFixed(2)} m³
+                    </span>
                   </div>
                 </div>
 
-                <div className="p-4 border border-slate-200 rounded-lg space-y-3">
-                  <label className="text-xs font-semibold text-slate-600 block">Irrigation Water</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.irrigationWater || ''}
-                      onChange={e => handleInputChange('irrigationWater', e.target.value)}
-                      className="flex-1 border border-slate-200 rounded-lg p-2.5 font-data-table text-sm outline-none"
-                    />
-                    <div className="bg-slate-100 border border-slate-200 rounded-lg px-4 flex items-center text-xs font-bold">m³</div>
+                {/* Map/Location Placeholder for Context */}
+                <div className="rounded-xl overflow-hidden border border-slate-200 h-[200px] relative group shadow-sm">
+                  <img 
+                    className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700" 
+                    alt="A clean, top-down architectural layout of a modern sustainable building floorplan" 
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3BqxoD8TgVrm8gKcwyKsPqEVKF-XPtUEqIrFx46eVGgJqhpYip40HkK8T9O1F2fKeOrH6gXkxj01KGbTGzYeXHvFkkWRdxt5_k3OITDKCYKgBYq66kFNko_jiWIySvS-2aqeOoekX_eVcxTFc7LDsk1kWLET6umVdoI8RjKxaVBvMTBrAmsLzLFENn0a3ijuUHXrILNsFl_boCGNkNB_6h51DcTb3oKLOsNq5f54UA4EDf5LCDCvQxpmUyyrOSYYPiukOw-Xcq7Q"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                  <div className="absolute bottom-4 left-4">
+                    <p className="text-white font-bold text-sm">Site: {selectedProperty.name}</p>
+                    <p className="text-white/70 text-xs">{selectedProperty.country === "Singapore" ? "Singapore CBD" : selectedProperty.country === "Australia" ? "Western Australia" : "Asia-Pacific Region"}</p>
+                  </div>
+                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur p-2 rounded-lg text-[10px] font-bold shadow-sm text-slate-800">
+                    GPS: {selectedProperty.code === "SG-18ROB" ? "1.2823° N, 103.8507° E" : selectedProperty.code === "AU-ROLP" ? "31.9505° S, 115.8605° E" : "1.2902° N, 103.8519° E"}
                   </div>
                 </div>
-
-                {selectedProperty.code === "AU-ROLP" && (
-                  <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg flex gap-3 items-start">
-                    <span className="material-symbols-outlined text-amber-600 text-base mt-0.5">warning</span>
-                    <p className="leading-relaxed">
-                      <strong>Australian Hospitality Notice:</strong> Exclude guest tenant sub-meters from potable values. Report only base building central boilers.
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -445,69 +644,167 @@ function SubmissionForm({ selectedProperty, submissions, onSaveDraft, onSubmitFi
         {/* TAB 3: Fuel */}
         {formTab === 3 && (
           <div className="space-y-6">
-            <h4 className="font-headline-sm text-headline-sm text-slate-800">Stationary Combustibles</h4>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                {(selectedProperty.country === "Australia" || selectedProperty.country === "China" || selectedProperty.code === "SG-FRRP") ? (
-                  <div className="p-4 border border-slate-200 rounded-lg space-y-3">
-                    <label className="text-xs font-bold text-slate-700 block">Natural Gas Consumption</label>
-                    <div className="flex gap-2">
+            {/* Info Banner */}
+            <div className="bg-[#F3EEFE]/30 border border-primary/20 rounded-lg p-4 mb-6 flex items-center gap-4">
+              <span className="material-symbols-outlined text-primary">info</span>
+              <p className="font-body-sm text-slate-600">
+                <span className="font-bold text-slate-800">Conversion Factors:</span> 1 m³ Natural Gas ≈ 10.63 kWh, 1 Litre Diesel ≈ 10.63 kWh.
+                <span className="ml-4">Reporting standard: <span className="font-data-table font-bold text-primary">GRI 302-1</span>.</span>
+              </p>
+            </div>
+
+            {/* Split Screen Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Left Column: Stationary Combustibles Management (col-span-7) */}
+              <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                  <h3 className="font-headline-sm text-slate-800 font-bold">Stationary Combustibles Management</h3>
+                </div>
+                <div className="p-8 space-y-6">
+                  {/* Natural Gas Input */}
+                  {(selectedProperty.country === "Australia" || selectedProperty.country === "China" || selectedProperty.code === "SG-FRRP") ? (
+                    <div className="space-y-2">
+                      <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">NATURAL GAS CONSUMPTION</label>
+                      <div className="flex w-full items-stretch">
+                        <input 
+                          type="number"
+                          placeholder="0.00"
+                          value={formValues.naturalGas || ''}
+                          onChange={e => handleInputChange('naturalGas', e.target.value)}
+                          className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">m³</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">Total natural gas volume consumed for heating/cooling systems.</p>
+                    </div>
+                  ) : (
+                    <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center text-xs text-slate-400">
+                      Natural Gas connection is not registered for {selectedProperty.name}.
+                    </div>
+                  )}
+
+                  {/* Town Gas Input */}
+                  {selectedProperty.code === "SG-FRRP" && (
+                    <div className="space-y-2 pt-4 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">TOWN GAS (TENANT LEASED ASSETS)</label>
+                        <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-extrabold tracking-tighter uppercase font-bold">PROPERTY SPECIFIC</span>
+                      </div>
+                      <div className="flex w-full items-stretch">
+                        <input 
+                          type="number"
+                          placeholder="0.00"
+                          value={formValues.townGas || ''}
+                          onChange={e => handleInputChange('townGas', e.target.value)}
+                          className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">m³</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">Tenant-shared utilities reporting for town gas.</p>
+                    </div>
+                  )}
+
+                  {/* Diesel Input */}
+                  <div className="space-y-2 pt-4 border-t border-slate-100">
+                    <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">DIESEL FUEL (GENERATORS)</label>
+                    <div className="flex w-full items-stretch">
                       <input 
                         type="number"
                         placeholder="0.00"
-                        value={formValues.naturalGas || ''}
-                        onChange={e => handleInputChange('naturalGas', e.target.value)}
-                        className="flex-1 border border-slate-200 rounded-lg p-2.5 font-data-table text-sm outline-none"
+                        value={formValues.diesel || ''}
+                        onChange={e => handleInputChange('diesel', e.target.value)}
+                        className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                       />
-                      <div className="bg-slate-100 border border-slate-200 rounded-lg px-4 flex items-center text-xs font-bold">m³</div>
+                      <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">Litres</span>
                     </div>
-                    {formValues.naturalGas > 0 && (
-                      <div className="text-xs text-primary font-bold bg-primary-container/10 px-3 py-1.5 rounded flex items-center gap-1 mt-2">
-                        <span className="material-symbols-outlined text-xs">sync</span>
-                        Equivalent Energy: {gasKwhEquiv} kWh
-                      </div>
-                    )}
+                    <p className="text-[11px] text-slate-400">Diesel volume consumed for emergency power generator backup.</p>
                   </div>
-                ) : (
-                  <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center text-xs text-slate-400">
-                    Natural Gas connection is not registered for {selectedProperty.name}.
-                  </div>
-                )}
-
-                {selectedProperty.code === "SG-FRRP" && (
-                  <div className="p-4 border border-primary/20 bg-primary/5 rounded-lg space-y-3">
-                    <label className="text-xs font-bold text-primary block">Town Gas (Tenant Leased Assets)</label>
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.townGas || ''}
-                      onChange={e => handleInputChange('townGas', e.target.value)}
-                      className="w-full border border-primary/20 rounded-lg p-2.5 font-data-table text-sm outline-none bg-white"
-                    />
-                  </div>
-                )}
+                </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="p-4 border border-slate-200 rounded-lg space-y-3">
-                  <label className="text-xs font-bold text-slate-700 block">Diesel Fuel (Generators)</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.diesel || ''}
-                      onChange={e => handleInputChange('diesel', e.target.value)}
-                      className="flex-1 border border-slate-200 rounded-lg p-2.5 font-data-table text-sm outline-none"
-                    />
-                    <div className="bg-slate-100 border border-slate-200 rounded-lg px-4 flex items-center text-xs font-bold">Litres</div>
+              {/* Right Column: Energy Breakdown & Map/Location Context (col-span-5) */}
+              <div className="lg:col-span-5 space-y-6">
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 className="font-headline-sm text-slate-800 font-bold">Energy Breakdown</h3>
                   </div>
-                  {formValues.diesel > 0 && (
-                    <div className="text-xs text-primary font-bold bg-primary-container/10 px-3 py-1.5 rounded flex items-center gap-1 mt-2">
-                      <span className="material-symbols-outlined text-xs">sync</span>
-                      Equivalent Energy: {dieselKwhEquiv} kWh
+                  <div className="p-6 space-y-4">
+                    {/* Natural Gas Breakdown */}
+                    {(selectedProperty.country === "Australia" || selectedProperty.country === "China" || selectedProperty.code === "SG-FRRP") && (
+                      <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+                        <div>
+                          <p className="font-body-md font-bold text-slate-800">Natural Gas Energy</p>
+                          <p className="text-xs text-slate-400">Gas Equivalent</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-data-table font-bold text-slate-800 text-sm">
+                            {Number(gasKwhEquiv).toLocaleString()} kWh
+                          </p>
+                          <p className="text-[10px] text-slate-400">Converted from {formValues.naturalGas || 0} m³</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Town Gas Breakdown */}
+                    {selectedProperty.code === "SG-FRRP" && (
+                      <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+                        <div>
+                          <p className="font-body-md font-bold text-slate-800">Town Gas Energy</p>
+                          <p className="text-xs text-slate-400">Tenant Equivalent</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-data-table font-bold text-slate-800 text-sm">
+                            {(Number(formValues.townGas || 0) * 10.63).toFixed(2).toLocaleString()} kWh
+                          </p>
+                          <p className="text-[10px] text-slate-400">Converted from {formValues.townGas || 0} m³</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Diesel Breakdown */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">Diesel Fuel Energy</p>
+                        <p className="text-xs text-slate-400">Generator Equivalent</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-data-table font-bold text-slate-800 text-sm">
+                          {Number(dieselKwhEquiv).toLocaleString()} kWh
+                        </p>
+                        <p className="text-[10px] text-slate-400">Converted from {formValues.diesel || 0} Litres</p>
+                      </div>
                     </div>
-                  )}
+                  </div>
+
+                  <div className="px-6 py-4 bg-primary/5 border-t border-primary/10 flex justify-between items-center">
+                    <span className="font-label-caps text-primary font-bold text-xs tracking-wider">TOTAL ENERGY</span>
+                    <span className="font-data-table font-bold text-primary text-base">
+                      {(() => {
+                        let total = Number(dieselKwhEquiv) + Number(gasKwhEquiv);
+                        if (selectedProperty.code === "SG-FRRP") {
+                          total += Number(formValues.townGas || 0) * 10.63;
+                        }
+                        return total.toFixed(2);
+                      })()} kWh eq.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Map/Location Placeholder for Context */}
+                <div className="rounded-xl overflow-hidden border border-slate-200 h-[200px] relative group shadow-sm">
+                  <img 
+                    className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700" 
+                    alt="A clean, top-down architectural layout of a modern sustainable building floorplan" 
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3BqxoD8TgVrm8gKcwyKsPqEVKF-XPtUEqIrFx46eVGgJqhpYip40HkK8T9O1F2fKeOrH6gXkxj01KGbTGzYeXHvFkkWRdxt5_k3OITDKCYKgBYq66kFNko_jiWIySvS-2aqeOoekX_eVcxTFc7LDsk1kWLET6umVdoI8RjKxaVBvMTBrAmsLzLFENn0a3ijuUHXrILNsFl_boCGNkNB_6h51DcTb3oKLOsNq5f54UA4EDf5LCDCvQxpmUyyrOSYYPiukOw-Xcq7Q"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                  <div className="absolute bottom-4 left-4">
+                    <p className="text-white font-bold text-sm">Site: {selectedProperty.name}</p>
+                    <p className="text-white/70 text-xs">{selectedProperty.country === "Singapore" ? "Singapore CBD" : selectedProperty.country === "Australia" ? "Western Australia" : "Asia-Pacific Region"}</p>
+                  </div>
+                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur p-2 rounded-lg text-[10px] font-bold shadow-sm text-slate-800">
+                    GPS: {selectedProperty.code === "SG-18ROB" ? "1.2823° N, 103.8507° E" : selectedProperty.code === "AU-ROLP" ? "31.9505° S, 115.8605° E" : "1.2902° N, 103.8519° E"}
+                  </div>
                 </div>
               </div>
             </div>
@@ -517,91 +814,185 @@ function SubmissionForm({ selectedProperty, submissions, onSaveDraft, onSubmitFi
         {/* TAB 4: Waste */}
         {formTab === 4 && (
           <div className="space-y-6">
-            <h4 className="font-headline-sm text-headline-sm text-slate-800">Operational Waste Log</h4>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <div className="p-4 border border-slate-200 rounded-lg space-y-3">
-                  <label className="text-xs font-bold text-slate-700 block">General Unsorted Solid Waste</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.generalWaste || ''}
-                      onChange={e => handleInputChange('generalWaste', e.target.value)}
-                      className="flex-1 border border-slate-200 rounded-lg p-2.5 font-data-table text-sm outline-none"
-                    />
-                    <div className="bg-slate-100 border border-slate-200 rounded-lg px-4 flex items-center text-xs font-bold">kg</div>
-                  </div>
+            {/* Info Banner */}
+            <div className="bg-[#F3EEFE]/30 border border-primary/20 rounded-lg p-4 mb-6 flex items-center gap-4">
+              <span className="material-symbols-outlined text-primary">info</span>
+              <p className="font-body-sm text-slate-600">
+                <span className="font-bold text-slate-800">Waste Log Standard:</span> Operational waste reporting aligned with ESG benchmarks.
+                <span className="ml-4">Diversion Target: <span className="font-data-table font-bold text-primary">60% minimum</span>.</span>
+              </p>
+            </div>
+
+            {/* Split Screen Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Left Column: Waste Management (col-span-7) */}
+              <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                  <h3 className="font-headline-sm text-slate-800 font-bold">Operational Waste Log</h3>
                 </div>
-
-                {selectedProperty.segment === "Hospitality" && (
-                  <div className="p-4 border border-primary/20 bg-primary/5 rounded-lg space-y-3">
-                    <label className="text-xs font-bold text-primary block">Food Waste (Separate Collection)</label>
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.foodWaste || ''}
-                      onChange={e => handleInputChange('foodWaste', e.target.value)}
-                      className="w-full border border-primary/20 rounded-lg p-2.5 font-data-table text-sm outline-none bg-white"
-                    />
+                <div className="p-8 space-y-6">
+                  {/* General Waste */}
+                  <div className="space-y-2">
+                    <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">GENERAL UNSORTED SOLID WASTE</label>
+                    <div className="flex w-full items-stretch">
+                      <input 
+                        type="number"
+                        placeholder="0.00"
+                        value={formValues.generalWaste || ''}
+                        onChange={e => handleInputChange('generalWaste', e.target.value)}
+                        className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                      />
+                      <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">kg</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">Total weight of unsorted landfill-directed operational waste.</p>
                   </div>
-                )}
 
-                {selectedProperty.code === "AU-ROLP" && (
-                  <div className="p-4 border border-emerald-300 bg-emerald-50 rounded-lg space-y-3">
-                    <label className="text-xs font-bold text-emerald-800 block">Containers for Change Scheme (mixed glass/plastic)</label>
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.containersForChange || ''}
-                      onChange={e => handleInputChange('containersForChange', e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg p-2.5 font-data-table text-sm outline-none bg-white"
-                    />
-                  </div>
-                )}
+                  {/* Food Waste */}
+                  {selectedProperty.segment === "Hospitality" && (
+                    <div className="space-y-2 pt-4 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">FOOD WASTE (SEPARATE COLLECTION)</label>
+                        <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-extrabold tracking-tighter uppercase font-bold">PROPERTY SPECIFIC</span>
+                      </div>
+                      <div className="flex w-full items-stretch">
+                        <input 
+                          type="number"
+                          placeholder="0.00"
+                          value={formValues.foodWaste || ''}
+                          onChange={e => handleInputChange('foodWaste', e.target.value)}
+                          className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">kg</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">Organic and food waste gathered for composting.</p>
+                    </div>
+                  )}
+
+                  {/* Containers for Change */}
+                  {selectedProperty.code === "AU-ROLP" && (
+                    <div className="space-y-2 pt-4 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">CONTAINERS FOR CHANGE SCHEME</label>
+                        <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-extrabold tracking-tighter uppercase font-bold">REGIONAL SCHEME</span>
+                      </div>
+                      <div className="flex w-full items-stretch">
+                        <input 
+                          type="number"
+                          placeholder="0.00"
+                          value={formValues.containersForChange || ''}
+                          onChange={e => handleInputChange('containersForChange', e.target.value)}
+                          className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">kg</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">State-run container deposit scheme return weight (mixed glass/plastic).</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 border border-slate-200 rounded-lg space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Plastic Waste</label>
-                    <input 
-                      type="number"
-                      placeholder="kg"
-                      value={formValues.plasticWaste || ''}
-                      onChange={e => handleInputChange('plasticWaste', e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg p-2 text-xs font-data-table"
-                    />
+              {/* Right Column: Sorted Recycling & Map/Location Context (col-span-5) */}
+              <div className="lg:col-span-5 space-y-6">
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 className="font-headline-sm text-slate-800 font-bold">Sorted Recycling Breakdown</h3>
                   </div>
-                  <div className="p-4 border border-slate-200 rounded-lg space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Glass Waste</label>
-                    <input 
-                      type="number"
-                      placeholder="kg"
-                      value={formValues.glassWaste || ''}
-                      onChange={e => handleInputChange('glassWaste', e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg p-2 text-xs font-data-table"
-                    />
+                  <div className="p-6 space-y-4">
+                    {/* Plastic Waste */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-primary transition-all">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">Plastic Waste</p>
+                        <p className="text-xs text-slate-400">Category: Recyclable</p>
+                      </div>
+                      <div className="flex items-center gap-2 max-w-[130px] w-full">
+                        <input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formValues.plasticWaste || ''}
+                          onChange={e => handleInputChange('plasticWaste', e.target.value)}
+                          className="w-full min-w-0 text-right font-data-table font-bold border border-slate-200 rounded p-1.5 text-sm focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="text-[10px] text-slate-500 font-bold flex-shrink-0">kg</span>
+                      </div>
+                    </div>
+
+                    {/* Glass Waste */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-primary transition-all">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">Glass Waste</p>
+                        <p className="text-xs text-slate-400">Category: Recyclable</p>
+                      </div>
+                      <div className="flex items-center gap-2 max-w-[130px] w-full">
+                        <input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formValues.glassWaste || ''}
+                          onChange={e => handleInputChange('glassWaste', e.target.value)}
+                          className="w-full min-w-0 text-right font-data-table font-bold border border-slate-200 rounded p-1.5 text-sm focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="text-[10px] text-slate-500 font-bold flex-shrink-0">kg</span>
+                      </div>
+                    </div>
+
+                    {/* Paper Waste */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-primary transition-all">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">Paper Waste</p>
+                        <p className="text-xs text-slate-400">Category: Recyclable</p>
+                      </div>
+                      <div className="flex items-center gap-2 max-w-[130px] w-full">
+                        <input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formValues.paperWaste || ''}
+                          onChange={e => handleInputChange('paperWaste', e.target.value)}
+                          className="w-full min-w-0 text-right font-data-table font-bold border border-slate-200 rounded p-1.5 text-sm focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="text-[10px] text-slate-500 font-bold flex-shrink-0">kg</span>
+                      </div>
+                    </div>
+
+                    {selectedProperty.code === "AU-ROLP" && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-relaxed rounded-lg">
+                        ⚠️ <strong>Compliance note:</strong> Plastic waste should be classified under recycled plastic. Food waste should be classified under recycling - compost processed.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="px-6 py-4 bg-primary/5 border-t border-primary/10 flex justify-between items-center">
+                    <span className="font-label-caps text-primary font-bold text-xs tracking-wider">TOTAL WASTE LOGGED</span>
+                    <span className="font-data-table font-bold text-primary text-base">
+                      {(
+                        Number(formValues.generalWaste || 0) +
+                        Number(formValues.foodWaste || 0) +
+                        Number(formValues.containersForChange || 0) +
+                        Number(formValues.plasticWaste || 0) +
+                        Number(formValues.glassWaste || 0) +
+                        Number(formValues.paperWaste || 0)
+                      ).toFixed(2)} kg
+                    </span>
                   </div>
                 </div>
 
-                <div className="p-4 border border-slate-200 rounded-lg space-y-2">
-                  <label className="text-xs font-semibold text-slate-600 block">Paper Waste</label>
-                  <input 
-                    type="number"
-                    placeholder="kg"
-                    value={formValues.paperWaste || ''}
-                    onChange={e => handleInputChange('paperWaste', e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg p-2 text-xs font-data-table"
+                {/* Map/Location Placeholder for Context */}
+                <div className="rounded-xl overflow-hidden border border-slate-200 h-[200px] relative group shadow-sm">
+                  <img 
+                    className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700" 
+                    alt="A clean, top-down architectural layout of a modern sustainable building floorplan" 
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3BqxoD8TgVrm8gKcwyKsPqEVKF-XPtUEqIrFx46eVGgJqhpYip40HkK8T9O1F2fKeOrH6gXkxj01KGbTGzYeXHvFkkWRdxt5_k3OITDKCYKgBYq66kFNko_jiWIySvS-2aqeOoekX_eVcxTFc7LDsk1kWLET6umVdoI8RjKxaVBvMTBrAmsLzLFENn0a3ijuUHXrILNsFl_boCGNkNB_6h51DcTb3oKLOsNq5f54UA4EDf5LCDCvQxpmUyyrOSYYPiukOw-Xcq7Q"
                   />
-                </div>
-
-                {selectedProperty.code === "AU-ROLP" && (
-                  <div className="p-3.5 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-relaxed rounded-lg">
-                    ⚠️ <strong>Compliance note:</strong> Plastic waste should be classified under recycled plastic. Food waste should be classified under recycling - compost processed.
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                  <div className="absolute bottom-4 left-4">
+                    <p className="text-white font-bold text-sm">Site: {selectedProperty.name}</p>
+                    <p className="text-white/70 text-xs">{selectedProperty.country === "Singapore" ? "Singapore CBD" : selectedProperty.country === "Australia" ? "Western Australia" : "Asia-Pacific Region"}</p>
                   </div>
-                )}
+                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur p-2 rounded-lg text-[10px] font-bold shadow-sm text-slate-800">
+                    GPS: {selectedProperty.code === "SG-18ROB" ? "1.2823° N, 103.8507° E" : selectedProperty.code === "AU-ROLP" ? "31.9505° S, 115.8605° E" : "1.2902° N, 103.8519° E"}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -610,76 +1001,161 @@ function SubmissionForm({ selectedProperty, submissions, onSaveDraft, onSubmitFi
         {/* TAB 5: Recycling */}
         {formTab === 5 && (
           <div className="space-y-6">
-            <h4 className="font-headline-sm text-headline-sm text-slate-800">Diverted Waste &amp; Recycling</h4>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <div className="p-4 border border-slate-200 rounded-lg space-y-3">
-                  <label className="text-xs font-bold text-slate-700 block">Office Paper Consumption</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.paperReams || ''}
-                      onChange={e => handleInputChange('paperReams', e.target.value)}
-                      className="flex-1 border border-slate-200 rounded-lg p-2.5 font-data-table text-sm outline-none"
-                    />
-                    <div className="bg-slate-100 border border-slate-200 rounded-lg px-4 flex items-center text-xs font-bold">Reams</div>
+            {/* Info Banner */}
+            <div className="bg-[#F3EEFE]/30 border border-primary/20 rounded-lg p-4 mb-6 flex items-center gap-4">
+              <span className="material-symbols-outlined text-primary">info</span>
+              <p className="font-body-sm text-slate-600">
+                <span className="font-bold text-slate-800">Recycling Metric:</span> Paper conversion uses 2.5 kg per ream. 
+                <span className="ml-4">Audited by: <span className="font-data-table font-bold text-primary">Green Circle Certifications</span>.</span>
+              </p>
+            </div>
+
+            {/* Split Screen Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Left Column: Diverted Waste & Consumption (col-span-7) */}
+              <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                  <h3 className="font-headline-sm text-slate-800 font-bold">Diverted Waste &amp; Consumption</h3>
+                </div>
+                <div className="p-8 space-y-6">
+                  {/* Office Paper Consumption */}
+                  <div className="space-y-2">
+                    <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">OFFICE PAPER CONSUMPTION</label>
+                    <div className="flex w-full items-stretch">
+                      <input 
+                        type="number"
+                        placeholder="0.00"
+                        value={formValues.paperReams || ''}
+                        onChange={e => handleInputChange('paperReams', e.target.value)}
+                        className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                      />
+                      <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">Reams</span>
+                    </div>
+                    {formValues.paperReams > 0 && (
+                      <p className="text-xs text-primary font-bold bg-primary/5 border border-primary/10 px-3 py-1.5 rounded flex items-center gap-1 mt-2">
+                        <span className="material-symbols-outlined text-xs">sync</span>
+                        Weight conversion: {paperKgEquiv} kg (1 ream ≈ 2.5 kg)
+                      </p>
+                    )}
+                    <p className="text-[11px] text-slate-400">Total paper supply reams purchased and consumed.</p>
                   </div>
-                  {formValues.paperReams > 0 && (
-                    <div className="text-xs text-primary font-bold bg-primary-container/10 px-3 py-1.5 rounded flex items-center gap-1 mt-2">
-                      <span className="material-symbols-outlined text-xs">sync</span>
-                      Weight conversion: {paperKgEquiv} kg (1 ream ≈ 2.5 kg)
+
+                  {/* Compost Processed */}
+                  {selectedProperty.segment === "Hospitality" && (
+                    <div className="space-y-2 pt-4 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <label className="font-label-caps text-xs font-bold text-slate-500 tracking-wider">COMPOST PROCESSED (ON-SITE / DIVERTED)</label>
+                        <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-extrabold tracking-tighter uppercase font-bold">PROPERTY SPECIFIC</span>
+                      </div>
+                      <div className="flex w-full items-stretch">
+                        <input 
+                          type="number"
+                          placeholder="0.00"
+                          value={formValues.compostProcessed || ''}
+                          onChange={e => handleInputChange('compostProcessed', e.target.value)}
+                          className="flex-1 min-w-0 border border-slate-200 rounded-l-lg px-4 py-3 font-data-table text-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg px-4 py-3 font-label-caps text-slate-500 flex items-center justify-center text-xs font-bold flex-shrink-0">kg</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">On-site processing of organic solid food waste into compost fertilizer.</p>
                     </div>
                   )}
                 </div>
-
-                {selectedProperty.segment === "Hospitality" && (
-                  <div className="p-4 border border-primary/20 bg-primary/5 rounded-lg space-y-3">
-                    <label className="text-xs font-bold text-primary block">Compost Processed (On-site / Diverted)</label>
-                    <input 
-                      type="number"
-                      placeholder="0.00"
-                      value={formValues.compostProcessed || ''}
-                      onChange={e => handleInputChange('compostProcessed', e.target.value)}
-                      className="w-full border border-primary/20 rounded-lg p-2.5 font-data-table text-sm bg-white"
-                    />
-                  </div>
-                )}
               </div>
 
-              <div className="space-y-4 p-4 border border-slate-200 rounded-lg">
-                <label className="text-xs font-bold text-slate-700 block mb-3">Recycling Raw Commodities</label>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-slate-500">Recycled Plastics</span>
-                    <input 
-                      type="number"
-                      placeholder="kg"
-                      value={formValues.recyclingPlastic || ''}
-                      onChange={e => handleInputChange('recyclingPlastic', e.target.value)}
-                      className="w-24 border border-slate-200 rounded p-1.5 font-data-table text-xs text-right"
-                    />
+              {/* Right Column: Recycling Raw Commodities & Map/Location Context (col-span-5) */}
+              <div className="lg:col-span-5 space-y-6">
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 className="font-headline-sm text-slate-800 font-bold">Recycling Raw Commodities</h3>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-slate-500">Recycled Metals</span>
-                    <input 
-                      type="number"
-                      placeholder="kg"
-                      value={formValues.recyclingMetal || ''}
-                      onChange={e => handleInputChange('recyclingMetal', e.target.value)}
-                      className="w-24 border border-slate-200 rounded p-1.5 font-data-table text-xs text-right"
-                    />
+                  <div className="p-6 space-y-4">
+                    {/* Recycled Plastics */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-primary transition-all">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">Recycled Plastics</p>
+                        <p className="text-xs text-slate-400">Commodity Code: PET/HDPE</p>
+                      </div>
+                      <div className="flex items-center gap-2 max-w-[130px] w-full">
+                        <input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formValues.recyclingPlastic || ''}
+                          onChange={e => handleInputChange('recyclingPlastic', e.target.value)}
+                          className="w-full min-w-0 text-right font-data-table font-bold border border-slate-200 rounded p-1.5 text-sm focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="text-[10px] text-slate-500 font-bold flex-shrink-0">kg</span>
+                      </div>
+                    </div>
+
+                    {/* Recycled Metals */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-primary transition-all">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">Recycled Metals</p>
+                        <p className="text-xs text-slate-400">Commodity Code: AL/FE</p>
+                      </div>
+                      <div className="flex items-center gap-2 max-w-[130px] w-full">
+                        <input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formValues.recyclingMetal || ''}
+                          onChange={e => handleInputChange('recyclingMetal', e.target.value)}
+                          className="w-full min-w-0 text-right font-data-table font-bold border border-slate-200 rounded p-1.5 text-sm focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="text-[10px] text-slate-500 font-bold flex-shrink-0">kg</span>
+                      </div>
+                    </div>
+
+                    {/* Recycled Glass */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-primary transition-all">
+                      <div>
+                        <p className="font-body-md font-bold text-slate-800">Recycled Glass</p>
+                        <p className="text-xs text-slate-400">Commodity Code: GL-01</p>
+                      </div>
+                      <div className="flex items-center gap-2 max-w-[130px] w-full">
+                        <input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formValues.recyclingGlass || ''}
+                          onChange={e => handleInputChange('recyclingGlass', e.target.value)}
+                          className="w-full min-w-0 text-right font-data-table font-bold border border-slate-200 rounded p-1.5 text-sm focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        <span className="text-[10px] text-slate-500 font-bold flex-shrink-0">kg</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-slate-500">Recycled Glass</span>
-                    <input 
-                      type="number"
-                      placeholder="kg"
-                      value={formValues.recyclingGlass || ''}
-                      onChange={e => handleInputChange('recyclingGlass', e.target.value)}
-                      className="w-24 border border-slate-200 rounded p-1.5 font-data-table text-xs text-right"
-                    />
+
+                  <div className="px-6 py-4 bg-primary/5 border-t border-primary/10 flex justify-between items-center">
+                    <span className="font-label-caps text-primary font-bold text-xs tracking-wider">TOTAL DIVERTED WASTE</span>
+                    <span className="font-data-table font-bold text-primary text-base">
+                      {(
+                        Number(formValues.compostProcessed || 0) +
+                        Number(formValues.recyclingPlastic || 0) +
+                        Number(formValues.recyclingMetal || 0) +
+                        Number(formValues.recyclingGlass || 0) +
+                        (Number(formValues.paperReams || 0) * 2.5)
+                      ).toFixed(2)} kg
+                    </span>
+                  </div>
+                </div>
+
+                {/* Map/Location Placeholder for Context */}
+                <div className="rounded-xl overflow-hidden border border-slate-200 h-[200px] relative group shadow-sm">
+                  <img 
+                    className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700" 
+                    alt="A clean, top-down architectural layout of a modern sustainable building floorplan" 
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3BqxoD8TgVrm8gKcwyKsPqEVKF-XPtUEqIrFx46eVGgJqhpYip40HkK8T9O1F2fKeOrH6gXkxj01KGbTGzYeXHvFkkWRdxt5_k3OITDKCYKgBYq66kFNko_jiWIySvS-2aqeOoekX_eVcxTFc7LDsk1kWLET6umVdoI8RjKxaVBvMTBrAmsLzLFENn0a3ijuUHXrILNsFl_boCGNkNB_6h51DcTb3oKLOsNq5f54UA4EDf5LCDCvQxpmUyyrOSYYPiukOw-Xcq7Q"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                  <div className="absolute bottom-4 left-4">
+                    <p className="text-white font-bold text-sm">Site: {selectedProperty.name}</p>
+                    <p className="text-white/70 text-xs">{selectedProperty.country === "Singapore" ? "Singapore CBD" : selectedProperty.country === "Australia" ? "Western Australia" : "Asia-Pacific Region"}</p>
+                  </div>
+                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur p-2 rounded-lg text-[10px] font-bold shadow-sm text-slate-800">
+                    GPS: {selectedProperty.code === "SG-18ROB" ? "1.2823° N, 103.8507° E" : selectedProperty.code === "AU-ROLP" ? "31.9505° S, 115.8605° E" : "1.2902° N, 103.8519° E"}
                   </div>
                 </div>
               </div>
@@ -864,7 +1340,6 @@ export default function App() {
   const [role, setRole] = useState('bm'); // bm, rm, sm
   const [page, setPage] = useState('dashboard'); // dashboard, form, history, outstanding, escalation, submissions, master, amendments
   const [selectedProperty, setSelectedProperty] = useState(PROPERTIES[0]);
-  const [propertySearch, setPropertySearch] = useState('');
   const [submissions, setSubmissions] = useState(INITIAL_SUBMISSIONS);
   const [globalSearch, setGlobalSearch] = useState('');
   
@@ -1320,46 +1795,48 @@ export default function App() {
               </div>
 
               {/* Property Selector Card */}
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                <div className="space-y-2">
-                  <label className="font-label-caps text-xs font-bold text-slate-500 uppercase tracking-wider block">Selected Asset</label>
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <div className="md:col-span-4 space-y-2">
+                  <label className="font-label-caps text-xs font-bold text-slate-500 uppercase tracking-wider block">SELECT PROPERTY</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400">search</span>
-                    <input 
-                      type="text"
-                      placeholder="Search property..."
-                      value={propertySearch}
-                      onChange={e => setPropertySearch(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-10 pr-8 py-2 text-sm font-semibold outline-none focus:ring-1 focus:ring-primary focus:bg-white transition-all"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 pointer-events-none">expand_more</span>
-                    
-                    {/* Search Results Dropdown */}
-                    {propertySearch && (
-                      <div className="absolute top-[105%] left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-56 overflow-y-auto">
-                        {PROPERTIES.filter(p => p.name.toLowerCase().includes(propertySearch.toLowerCase())).map(p => (
-                          <div 
-                            key={p.id}
-                            onClick={() => { setSelectedProperty(p); setPropertySearch(''); }}
-                            className="px-4 py-2.5 hover:bg-slate-100 cursor-pointer flex justify-between items-center text-xs"
-                          >
-                            <div>
-                              <p className="font-bold text-slate-800">{p.name}</p>
-                              <p className="text-slate-400 mt-0.5">{p.code} · {p.segment}</p>
-                            </div>
-                            <span className="text-slate-400 font-semibold">{p.country}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <select 
+                      value={selectedProperty.id}
+                      onChange={e => {
+                        const p = PROPERTIES.find(prop => prop.id === Number(e.target.value));
+                        if (p) setSelectedProperty(p);
+                      }}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 font-semibold text-slate-800 appearance-none focus:ring-2 focus:ring-primary focus:border-primary outline-none text-sm"
+                    >
+                      {PROPERTIES.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">expand_more</span>
                   </div>
                 </div>
 
-                <div className="md:col-span-2 flex gap-4 p-3 bg-slate-50 rounded-lg border border-slate-200 items-center">
-                  <span className="material-symbols-outlined text-primary text-3xl">info</span>
-                  <div className="overflow-hidden">
-                    <p className="text-xs font-bold text-slate-800">{selectedProperty.name} ({selectedProperty.code})</p>
-                    <p className="text-xs text-slate-500 truncate mt-0.5">{selectedProperty.desc}</p>
+                <div className="md:col-span-8 bg-slate-50 border border-primary/20 rounded-xl p-5 flex flex-wrap gap-x-12 gap-y-4 relative overflow-hidden">
+                  <div className="absolute right-0 top-0 w-32 h-full opacity-5 pointer-events-none">
+                    <div className="w-full h-full bg-primary" style={{ maskImage: 'radial-gradient(circle, black, transparent)', WebkitMaskImage: 'radial-gradient(circle, black, transparent)' }}></div>
+                  </div>
+                  <div className="min-w-[150px]">
+                    <p className="font-label-caps text-[10px] font-bold text-slate-400 uppercase tracking-wider">ASSET CODE</p>
+                    <p className="font-data-table text-primary font-bold text-base mt-1">{selectedProperty.code}</p>
+                  </div>
+                  <div>
+                    <p className="font-label-caps text-[10px] font-bold text-slate-400 uppercase tracking-wider">SEGMENT</p>
+                    <p className="font-body-md font-bold mt-1 text-slate-700">{selectedProperty.segment}</p>
+                  </div>
+                  <div>
+                    <p className="font-label-caps text-[10px] font-bold text-slate-400 uppercase tracking-wider">GROSS FLOOR AREA</p>
+                    <p className="font-body-md font-bold mt-1 text-slate-700">{Number(selectedProperty.gfa).toLocaleString()} m²</p>
+                  </div>
+                  <div>
+                    <p className="font-label-caps text-[10px] font-bold text-slate-400 uppercase tracking-wider">BASELINE FY</p>
+                    <p className="font-body-md font-bold mt-1 text-slate-700">{selectedProperty.baseline}</p>
+                  </div>
+                  <div className="w-full pt-2 border-t border-slate-200">
+                    <p className="text-xs text-slate-500 italic">{selectedProperty.desc}</p>
                   </div>
                 </div>
               </div>
